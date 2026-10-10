@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Page config
 st.set_page_config(page_title="Gold Price Predictor", layout="wide")
 
-# Part C: Streamlit dashboard
+# Streamlit dashboard
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600&display=swap');
@@ -21,51 +21,45 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Part C: Data loading
+# Data loading
 df = pd.read_csv("XAU_15m_data.csv", sep=";")
 
-# Part C: Data cleaning
+# Data cleaning
 df.dropna(inplace=True)
 df.drop_duplicates(inplace=True)
 
-# Part C: Target variable engineering (1 = price goes up, 0 = price goes down next 15 minutes)
+# Target variable engineering (1 = price goes up, 0 = price goes down)
 df["Target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-# Part C: Date parsing
+# Date parsing
 df["Date"] = pd.to_datetime(df["Date"])
 
-# Part C: Return calculation
+# Return calculation
 df["Return"] = df["Close"].pct_change()
-
-# Part C: Engineered features
-df["Range"] = df["High"] - df["Low"]
-df["MA5"] = df["Close"].rolling(window=5).mean()
-df["MA20"] = df["Close"].rolling(window=20).mean()
 
 df.dropna(inplace=True)
 
-# Part C: Feature selection
-features = ["Open", "High", "Low", "Close", "Range", "MA5", "MA20"]
+# Latest volume for prediction
+latest_volume = df["Volume"].iloc[-1]
+
+# Feature selection
+features = ["Open", "High", "Low", "Close", "Volume"]
 X = df[features]
 y = df["Target"]
 
-# Part C: Train and test
+# Train and test
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-# Part C: Machine learning (logistic regression)
+# Macchine learning (logistic regression)
 model = LogisticRegression(max_iter=1000)
 model.fit(X_train, y_train)
 
-# Part C: Accuracy evaluation
+# Accuracy evaluation
 y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
 cm = confusion_matrix(y_test, y_pred)
 
-# Part C: Sidebar (prediction widget)
-# Use the most recent MA values from the dataset as context for predictions
-latest_ma5 = df["MA5"].iloc[-1]
-latest_ma20 = df["MA20"].iloc[-1]
-
+# Sidebar (prediction widget)
 with st.sidebar:
     st.markdown("## Make a Prediction")
     st.write("Enter current gold price values to reveal a direction!")
@@ -73,27 +67,34 @@ with st.sidebar:
     high_val = st.number_input("High", min_value=0.0, value=1805.0, step=0.1)
     low_val = st.number_input("Low", min_value=0.0, value=1795.0, step=0.1)
     close_val = st.number_input("Close", min_value=0.0, value=1802.0, step=0.1)
+    # adding errors if high is lower than low and low is higher than high
     if st.button("Predict Direction"):
-        range_val = high_val - low_val
-        input_data = pd.DataFrame(
-            [[open_val, high_val, low_val, close_val, range_val, latest_ma5, latest_ma20]],
-            columns=["Open", "High", "Low", "Close", "Range", "MA5", "MA20"]
-        )
-        prediction = model.predict(input_data)[0]
-        if prediction == 1:
-            st.success("Price predicted to go UP")
+        if high_val < low_val:
+            st.error("High must be greater than Low.")
+        elif open_val < low_val or open_val > high_val:
+            st.error("Open must be between Low and High.")
+        elif close_val < low_val or close_val > high_val:
+            st.error("Close must be between Low and High.")
         else:
-            st.error("Price predicted to go DOWN")
+            input_data = pd.DataFrame(
+                [[open_val, high_val, low_val, close_val, latest_volume]],
+                columns=["Open", "High", "Low", "Close", "Volume"]
+            )
+            prediction = model.predict(input_data)[0]
+            if prediction == 1:
+                st.success("Price predicted to go UP")
+            else:
+                st.error("Price predicted to go DOWN")
 
-# Part C: Dashboard header
-st.title("Gold Price Direction Predictor")
+# Dashboard header
+st.title("Gold Price Predictor")
 st.write("Predicting whether gold prices (XAU/USD) will go up or down in the next 15-minute interval.")
 
-st.metric("Logistic Regression Model Accuracy", f"{accuracy:.2%}", help="Accuracy on held-out test data (20% of dataset). This value is fixed and does not change with the date filter.")
+st.metric("Logistic Regression Model Accuracy", f"{accuracy:.2%}", help="Accuracy score after training on 80% of the dataset and testing on the remaining 20%. This value is fixed and does not change with the date filter.")
 
 st.markdown("---")
 
-# Part C: Interactive query (date range filter)
+# Interactive query (date range filter)
 min_date = df["Date"].min().date()
 max_date = df["Date"].max().date()
 
@@ -106,10 +107,11 @@ with col2:
 
 filtered_df = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
 st.write(f"{len(filtered_df):,} records found from {start_date} to {end_date}.")
-st.dataframe(filtered_df[["Date", "Open", "High", "Low", "Close", "Volume"]], width='stretch')
+st.dataframe(filtered_df[["Date", "Open", "High", "Low", "Close", "Volume"]].head(50), use_container_width=True)
+
 st.markdown("---")
 
-# Part C: Visualization 1 (line chart)
+# Visualization 1 (line chart)
 st.subheader("XAU/USD Closing Price Over Time")
 fig1, ax1 = plt.subplots(figsize=(12, 3))
 fig1.patch.set_facecolor("#0E0E0E")
@@ -126,7 +128,7 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 st.pyplot(fig1)
 
-# Part C: Visualization 2 (histogram)
+# Visualization 2 (histogram)
 st.subheader("Distribution of 15-Minute Returns")
 fig2, ax2 = plt.subplots(figsize=(12, 3))
 fig2.patch.set_facecolor("#0E0E0E")
@@ -144,7 +146,7 @@ st.pyplot(fig2)
 
 st.markdown("---")
 
-# Part C: Visualization 3 (confusion matrix)
+# Visualization 3 (confusion matrix)
 st.subheader("Confusion Matrix")
 _, col_cm, _ = st.columns([1.2, 2, 1.2])
 with col_cm:
@@ -170,5 +172,6 @@ with col_cm:
     plt.tight_layout()
     st.pyplot(fig3)
 
-    st.markdown("---")
+# footer
+st.markdown("---")
 st.markdown("<div style='text-align:center; color:#666; font-size:0.8rem;'>Built by Rebecca Ovalles for Ovalles Trading · 2026</div>", unsafe_allow_html=True)
