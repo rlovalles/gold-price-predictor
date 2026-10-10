@@ -30,7 +30,6 @@ df.drop_duplicates(inplace=True)
 
 # Part C: Target variable engineering (1 = price goes up, 0 = price goes down next 15 minutes)
 df["Target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
-df.dropna(inplace=True)
 
 # Part C: Date parsing
 df["Date"] = pd.to_datetime(df["Date"])
@@ -38,8 +37,15 @@ df["Date"] = pd.to_datetime(df["Date"])
 # Part C: Return calculation
 df["Return"] = df["Close"].pct_change()
 
+# Part C: Engineered features
+df["Range"] = df["High"] - df["Low"]
+df["MA5"] = df["Close"].rolling(window=5).mean()
+df["MA20"] = df["Close"].rolling(window=20).mean()
+
+df.dropna(inplace=True)
+
 # Part C: Feature selection
-features = ["Open", "High", "Low", "Close", "Volume"]
+features = ["Open", "High", "Low", "Close", "Range", "MA5", "MA20"]
 X = df[features]
 y = df["Target"]
 
@@ -56,6 +62,10 @@ accuracy = accuracy_score(y_test, y_pred)
 cm = confusion_matrix(y_test, y_pred)
 
 # Part C: Sidebar (prediction widget)
+# Use the most recent MA values from the dataset as context for predictions
+latest_ma5 = df["MA5"].iloc[-1]
+latest_ma20 = df["MA20"].iloc[-1]
+
 with st.sidebar:
     st.markdown("## Make a Prediction")
     st.write("Enter current gold price values to reveal a direction!")
@@ -63,10 +73,12 @@ with st.sidebar:
     high_val = st.number_input("High", min_value=0.0, value=1805.0, step=0.1)
     low_val = st.number_input("Low", min_value=0.0, value=1795.0, step=0.1)
     close_val = st.number_input("Close", min_value=0.0, value=1802.0, step=0.1)
-    volume_val = st.number_input("Volume", min_value=0.0, value=100.0, step=1.0)
     if st.button("Predict Direction"):
-        input_data = pd.DataFrame([[open_val, high_val, low_val, close_val, volume_val]],
-                                   columns=["Open", "High", "Low", "Close", "Volume"])
+        range_val = high_val - low_val
+        input_data = pd.DataFrame(
+            [[open_val, high_val, low_val, close_val, range_val, latest_ma5, latest_ma20]],
+            columns=["Open", "High", "Low", "Close", "Range", "MA5", "MA20"]
+        )
         prediction = model.predict(input_data)[0]
         if prediction == 1:
             st.success("Price predicted to go UP")
@@ -75,9 +87,9 @@ with st.sidebar:
 
 # Part C: Dashboard header
 st.title("Gold Price Direction Predictor")
-st.write("Predicting whether gold prices (XAU/USD) will go up or down in the next 15-minute interval. This is purely for fun and not financial advice.")
+st.write("Predicting whether gold prices (XAU/USD) will go up or down in the next 15-minute interval.")
 
-st.metric("Accuracy", f"{accuracy:.2%}")
+st.metric("Logistic Regression Model Accuracy", f"{accuracy:.2%}", help="Accuracy on held-out test data (20% of dataset). This value is fixed and does not change with the date filter.")
 
 st.markdown("---")
 
@@ -93,9 +105,8 @@ with col2:
     end_date = st.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
 
 filtered_df = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
-st.write(f"{len(filtered_df):,} records found from {start_date} to {end_date}. Note: displaying only first 20 records.")
-st.dataframe(filtered_df[["Date", "Open", "High", "Low", "Close", "Volume"]].head(20), use_container_width=True)
-
+st.write(f"{len(filtered_df):,} records found from {start_date} to {end_date}.")
+st.dataframe(filtered_df[["Date", "Open", "High", "Low", "Close", "Volume"]], width='stretch')
 st.markdown("---")
 
 # Part C: Visualization 1 (line chart)
@@ -159,20 +170,5 @@ with col_cm:
     plt.tight_layout()
     st.pyplot(fig3)
 
-st.markdown("---")
-
-# Part C: Security features
-st.subheader("Security Notes")
-st.markdown("""
-    <div style="background-color:#1A1A1A; border-left: 4px solid #FFD700; padding: 1rem; border-radius: 4px;">
-    This application does not collect or store any user data. All data is loaded locally from a static CSV file.
-    No authentication is required as this is a read-only decision-support tool.
-    </div>
-""", unsafe_allow_html=True)
-
-# Part C: Monitoring and maintenance
-st.subheader("Monitoring and Maintenance")
-st.write(f"**Dataset size:** {len(df):,} records")
-st.write(f"**Date range covered:** {df['Date'].min().date()} to {df['Date'].max().date()}")
-st.write(f"**Model type:** Logistic Regression (scikit-learn)")
-st.write("**Recommended maintenance:** Retrain the model periodically as new price data becomes available to maintain prediction relevance.")
+    st.markdown("---")
+st.markdown("<div style='text-align:center; color:#666; font-size:0.8rem;'>Built by Rebecca Ovalles for Ovalles Trading · 2026</div>", unsafe_allow_html=True)
