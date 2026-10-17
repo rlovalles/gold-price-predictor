@@ -21,54 +21,68 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Data loading
-df = pd.read_csv("XAU_15m_data.csv", sep=";")
+# Data loading (cached so it only runs once)
+@st.cache_data
+def load_data():
+    df = pd.read_csv("XAU_15m_data.csv", sep=";")
 
-# Data cleaning
-df.dropna(inplace=True)
-df.drop_duplicates(inplace=True)
+    # Data cleaning
+    df.dropna(inplace=True)
+    df.drop_duplicates(inplace=True)
 
-# Target variable engineering (1 = price goes up, 0 = price goes down)
-df["Target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
+    # Target variable engineering (1 = price goes up, 0 = price goes down)
+    df["Target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-# Date parsing
-df["Date"] = pd.to_datetime(df["Date"])
+    # Date parsing
+    df["Date"] = pd.to_datetime(df["Date"])
 
-# Return calculation
-df["Return"] = df["Close"].pct_change()
+    # Return calculation
+    df["Return"] = df["Close"].pct_change()
 
-df.dropna(inplace=True)
+    df.dropna(inplace=True)
+    return df
+
+# Machine learning (logistic regression)
+@st.cache_resource
+def train_model():
+    df = load_data()
+
+    # Feature selection
+    features = ["Open", "High", "Low", "Close", "Volume"]
+    X = df[features]
+    y = df["Target"]
+
+    # Train and test
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+
+    # Accuracy evaluation
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    return model, accuracy, cm
+
+df = load_data()
+model, accuracy, cm = train_model()
 
 # Latest volume for prediction
 latest_volume = df["Volume"].iloc[-1]
-
-# Feature selection
-features = ["Open", "High", "Low", "Close", "Volume"]
-X = df[features]
-y = df["Target"]
-
-# Train and test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-# Macchine learning (logistic regression)
-model = LogisticRegression(max_iter=1000)
-model.fit(X_train, y_train)
-
-# Accuracy evaluation
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-cm = confusion_matrix(y_test, y_pred)
 
 # Sidebar (prediction widget)
 with st.sidebar:
     st.markdown("## Make a Prediction")
     st.write("Enter current gold price values to reveal a direction!")
-    open_val = st.number_input("Open", min_value=0.0, value=1800.0, step=0.1)
-    high_val = st.number_input("High", min_value=0.0, value=1805.0, step=0.1)
-    low_val = st.number_input("Low", min_value=0.0, value=1795.0, step=0.1)
-    close_val = st.number_input("Close", min_value=0.0, value=1802.0, step=0.1)
+    # form keeps the app from reloading until the button is clicked
+    with st.form("prediction_form", border=False, enter_to_submit=False):
+        open_val = st.number_input("Open", min_value=0.0, value=1800.0, step=0.1)
+        high_val = st.number_input("High", min_value=0.0, value=1805.0, step=0.1)
+        low_val = st.number_input("Low", min_value=0.0, value=1795.0, step=0.1)
+        close_val = st.number_input("Close", min_value=0.0, value=1802.0, step=0.1)
+        submitted = st.form_submit_button("Predict Direction")
     # adding errors if high is lower than low and low is higher than high
-    if st.button("Predict Direction"):
+    if submitted:
         if high_val < low_val:
             st.error("High must be greater than Low.")
         elif open_val < low_val or open_val > high_val:
