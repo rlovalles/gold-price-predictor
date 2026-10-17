@@ -22,7 +22,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Data loading (cached so it only runs once)
-@st.cache_data
+@st.cache_data(show_spinner="Loading gold price data...")
 def load_data():
     df = pd.read_csv("XAU_15m_data.csv", sep=";")
 
