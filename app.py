@@ -120,7 +120,7 @@ with col2:
     end_date = st.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
 
 filtered_df = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
-st.write(f"{len(filtered_df):,} records found from {start_date} to {end_date}.")
+st.write(f"{len(filtered_df):,} records found from {start_date} to {end_date}. Note: Showing only the first 50 rows.")
 st.dataframe(filtered_df[["Date", "Open", "High", "Low", "Close", "Volume"]].head(50), use_container_width=True)
 
 st.markdown("---")
